@@ -1,0 +1,68 @@
+version: 2
+updates:
+  # Enable version updates for Cargo
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      prefix-development: "chore"
+      include: "scope"
+    reviewers:
+      - "the-yaml-life/core-team"
+    assignees:
+      - "the-yaml-life/maintainers"
+    labels:
+      - "dependencies"
+      - "rust"
+    ignore:
+      # Ignore major version updates for critical dependencies
+      - dependency-name: "qdrant-client"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "tokio"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "serde"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Group TYL framework dependencies
+      tyl-framework:
+        patterns:
+          - "tyl-*"
+      # Group serialization dependencies
+      serialization:
+        patterns:
+          - "serde*"
+          - "serde_*"
+      # Group async runtime dependencies
+      async-runtime:
+        patterns:
+          - "tokio*"
+          - "futures*"
+          - "async-*"
+      # Group testing dependencies
+      testing:
+        patterns:
+          - "*test*"
+          - "criterion"
+          - "proptest"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "10:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "ci"
+      - "github-actions"

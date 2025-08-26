@@ -1,0 +1,93 @@
+name: ✨ Feature Request
+description: Suggest an idea for TYL Qdrant Adapter
+title: "[Feature]: "
+labels: ["enhancement", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature for TYL Qdrant Adapter!
+        
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Description
+      description: Is your feature request related to a problem? Please describe.
+      placeholder: I'm frustrated when...
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: Describe the solution you'd like
+      placeholder: I would like to see...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternative Solutions
+      description: Describe any alternative solutions or features you've considered
+      placeholder: Alternatively, we could...
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component would this feature affect?
+      options:
+        - QdrantAdapter
+        - MockQdrantAdapter
+        - Configuration
+        - Schema Migrations
+        - Filtering
+        - Vector Operations
+        - Collection Management
+        - Health Checks
+        - Documentation
+        - New Component
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: api
+    attributes:
+      label: Proposed API
+      description: If applicable, show what the API might look like
+      render: rust
+      placeholder: |
+        // Example usage
+        let adapter = QdrantAdapter::new();
+        adapter.new_feature().await?;
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature to you?
+      options:
+        - Low - Nice to have
+        - Medium - Would improve workflow
+        - High - Blocking current work
+        - Critical - Cannot proceed without it
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm the following
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: This feature aligns with TYL framework principles
+          required: true
+        - label: I would be willing to contribute to the implementation
+          required: false

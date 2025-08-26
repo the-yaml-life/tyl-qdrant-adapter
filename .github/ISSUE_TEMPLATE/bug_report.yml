@@ -1,0 +1,104 @@
+name: 🐛 Bug Report
+description: Create a report to help us improve
+title: "[Bug]: "
+labels: ["bug", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report for TYL Qdrant Adapter!
+        
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Tell us what happened!
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Configure QdrantAdapter with...
+        2. Call method...
+        3. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: A clear description of what you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: code
+    attributes:
+      label: Code Example
+      description: If applicable, add a minimal code example to reproduce the issue
+      render: rust
+      placeholder: |
+        use tyl_qdrant_adapter::*;
+        
+        // Your code here
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - QdrantAdapter
+        - MockQdrantAdapter
+        - Configuration
+        - Schema Migrations
+        - Filtering
+        - Vector Operations
+        - Collection Management
+        - Health Checks
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Please provide details about your environment
+      placeholder: |
+        - Rust version: 1.70.0
+        - tyl-qdrant-adapter version: 0.1.0
+        - Qdrant version: 1.15.0
+        - OS: Ubuntu 22.04
+        - Features enabled: schema-migration, mock
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error Logs
+      description: If applicable, add relevant error logs or stack traces
+      render: text
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      description: Please confirm you've done the following
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: I have provided a minimal code example
+          required: false
+        - label: I have included relevant error logs
+          required: false

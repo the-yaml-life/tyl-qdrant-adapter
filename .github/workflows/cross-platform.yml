@@ -1,0 +1,121 @@
+name: Cross Platform
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    # Run weekly to catch platform-specific issues
+    - cron: '0 6 * * 1'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cross-platform-build:
+    name: Cross Platform Build
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            rust: stable
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            rust: stable
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            rust: stable
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            rust: stable
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            rust: stable
+    
+    runs-on: ${{ matrix.os }}
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+        targets: ${{ matrix.target }}
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Build for target
+      run: cargo build --target ${{ matrix.target }} --verbose
+    
+    - name: Run tests (native only)
+      if: matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'x86_64-apple-darwin' || matrix.target == 'x86_64-pc-windows-msvc'
+      run: cargo test --target ${{ matrix.target }} --verbose
+
+  feature-matrix:
+    name: Feature Matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        features:
+          - ""
+          - "--features mock"
+          - "--features docker-testing"
+          - "--features schema-migration" 
+          - "--all-features"
+          - "--no-default-features"
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-features-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Build with features
+      run: cargo build ${{ matrix.features }} --verbose
+    
+    - name: Test with features (safe combinations only)
+      if: matrix.features != '--features docker-testing'
+      run: cargo test ${{ matrix.features }} --verbose
+
+  msrv-check:
+    name: MSRV Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install Rust MSRV
+      uses: dtolnay/rust-toolchain@1.70.0
+    
+    - name: Cache dependencies
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-msrv-cargo-${{ hashFiles('**/Cargo.lock') }}
+    
+    - name: Check MSRV compatibility
+      run: cargo check --verbose
+    
+    - name: Test MSRV compatibility
+      run: cargo test --lib --verbose
