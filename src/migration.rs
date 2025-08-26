@@ -512,9 +512,7 @@ where
                 // This would require data migration
                 Err(TylError::validation(
                     "update_collection",
-                    format!(
-                        "Collection {name} update not supported - requires manual migration"
-                    ),
+                    format!("Collection {name} update not supported - requires manual migration"),
                 ))
             }
             CollectionChange::RenameCollection { old_name, new_name } => {

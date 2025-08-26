@@ -118,10 +118,10 @@ jobs:
           - 6333:6333
           - 6334:6334
         options: >-
-          --health-cmd "curl -f http://localhost:6333/ || exit 1"
-          --health-interval 15s
-          --health-timeout 10s
-          --health-retries 10
+          --health-cmd "timeout 5s curl -s http://localhost:6333/ > /dev/null || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
     
     steps:
     - uses: actions/checkout@v4
@@ -140,9 +140,12 @@ jobs:
     
     - name: Wait for Qdrant to be ready
       run: |
-        timeout 120s bash -c 'until curl -f http://localhost:6333/; do echo "Waiting for Qdrant..."; sleep 5; done'
-        echo "Qdrant is ready!"
-        curl http://localhost:6333/health || echo "Health endpoint not available, continuing..."
+        echo "Waiting for Qdrant to become available..."
+        timeout 180s bash -c 'until curl -s http://localhost:6333/ > /dev/null; do echo "Waiting for Qdrant..."; sleep 3; done'
+        echo "Qdrant is responding!"
+        echo "Testing connection:"
+        curl -s http://localhost:6333/ | head -10 || echo "Basic endpoint test failed"
+        curl -s http://localhost:6333/health || echo "Health endpoint not available, continuing..."
     
     - name: Run Docker integration tests
       run: cargo test --test docker_integration_tests --features docker-testing -- --test-threads=1
