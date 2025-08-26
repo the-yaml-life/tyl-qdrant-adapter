@@ -7,7 +7,7 @@
 
 use tyl_qdrant_adapter::{CollectionConfig, DistanceMetric, SearchParams, Vector};
 use tyl_qdrant_adapter::{MockQdrantAdapter, QdrantAdapter};
-use tyl_qdrant_adapter::{VectorCollectionManager, VectorDatabase, VectorStore, VectorStoreHealth};
+use tyl_qdrant_adapter::{VectorCollectionManager, VectorStore};
 
 #[cfg(feature = "schema-migration")]
 use tyl_qdrant_adapter::migration::*;
@@ -141,7 +141,7 @@ async fn demonstrate_advanced_filtering(
 
     // Test 5: Range filtering demonstration (using public methods)
     println!("\n📊 Test 5: Range filtering capabilities");
-    if let Some(filter) = QdrantAdapter::build_range_filter(
+    if let Some(_filter) = QdrantAdapter::build_range_filter(
         "created_timestamp",
         Some(1640995200.0),
         Some(1672531200.0),
@@ -164,7 +164,7 @@ async fn demonstrate_advanced_filtering(
         ("featured".to_string(), serde_json::json!(true)),
     ];
 
-    if let Some(filter) = QdrantAdapter::build_complex_filter(
+    if let Some(_filter) = QdrantAdapter::build_complex_filter(
         must_conditions,
         should_conditions,
         vec![], // no must_not conditions

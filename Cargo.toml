@@ -2,6 +2,7 @@
 name = "tyl-qdrant-adapter"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.81.0"
 authors = ["TYL Framework Team"]
 license = "AGPL-3.0"
 repository = "https://github.com/the-yaml-life/tyl-qdrant-adapter"
@@ -38,6 +39,7 @@ pact_consumer = { version = "1.0", optional = true }
 pact_models = { version = "1.0", optional = true }
 semver = { version = "1.0", features = ["serde"] }
 tempfile = { version = "3.0", optional = true }
+uuid = { version = "1.0", features = ["v4"], optional = true }
 
 [dev-dependencies]
 # Development dependencies for testing
@@ -49,4 +51,4 @@ uuid = { version = "1.0", features = ["v4"] }
 default = ["mock"]
 mock = []
 docker-testing = ["reqwest"]
-schema-migration = ["pact_consumer", "pact_models", "tempfile"]
+schema-migration = ["pact_consumer", "pact_models", "tempfile", "uuid"]

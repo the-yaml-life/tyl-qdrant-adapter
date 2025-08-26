@@ -19,7 +19,7 @@ jobs:
         rust:
           - stable
           - beta
-          - 1.70.0  # MSRV
+          - 1.81.0  # MSRV
     steps:
     - uses: actions/checkout@v4
     
@@ -118,10 +118,10 @@ jobs:
           - 6333:6333
           - 6334:6334
         options: >-
-          --health-cmd "curl -f http://localhost:6333/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd "curl -f http://localhost:6333/ || exit 1"
+          --health-interval 15s
+          --health-timeout 10s
+          --health-retries 10
     
     steps:
     - uses: actions/checkout@v4
@@ -140,7 +140,9 @@ jobs:
     
     - name: Wait for Qdrant to be ready
       run: |
-        timeout 60s bash -c 'until curl -f http://localhost:6333/health; do sleep 2; done'
+        timeout 120s bash -c 'until curl -f http://localhost:6333/; do echo "Waiting for Qdrant..."; sleep 5; done'
+        echo "Qdrant is ready!"
+        curl http://localhost:6333/health || echo "Health endpoint not available, continuing..."
     
     - name: Run Docker integration tests
       run: cargo test --test docker_integration_tests --features docker-testing -- --test-threads=1
