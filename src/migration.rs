@@ -51,7 +51,11 @@ pub enum CollectionChange {
     /// Rename collection
     RenameCollection { old_name: String, new_name: String },
     /// Add index to collection
-    AddIndex { collection: String, field: String, index_type: IndexType },
+    AddIndex {
+        collection: String,
+        field: String,
+        index_type: IndexType,
+    },
     /// Remove index from collection
     RemoveIndex { collection: String, field: String },
 }
@@ -155,7 +159,7 @@ pub enum ResponseStatus {
 }
 
 /// Schema migration manager with Pact.io validation
-pub struct SchemaMigrationManager<T> 
+pub struct SchemaMigrationManager<T>
 where
     T: VectorDatabase + VectorStore + VectorCollectionManager + Send + Sync,
 {
@@ -208,7 +212,8 @@ where
     /// Apply migration with Pact validation
     pub async fn apply_migration(&self, migration: SchemaMigration) -> TylResult<MigrationResult> {
         // 1. Validate Pact contracts first
-        self.validate_pact_contracts(&migration.pact_contracts).await?;
+        self.validate_pact_contracts(&migration.pact_contracts)
+            .await?;
 
         // 2. Check migration dependencies
         self.validate_dependencies(&migration).await?;
@@ -233,7 +238,7 @@ where
     /// Rollback migration if reversible
     pub async fn rollback_migration(&self, version: semver::Version) -> TylResult<()> {
         let migration = self.get_migration_record(&version).await?;
-        
+
         if !migration.metadata.reversible {
             return Err(TylError::validation(
                 "rollback",
@@ -256,16 +261,21 @@ where
     pub async fn get_migration_history(&self) -> TylResult<Vec<SchemaMigration>> {
         // Query migration collection for all applied migrations
         let search_params = SearchParams::with_limit(1000); // Large limit to get all
-        let results = self.adapter.search_similar(
-            &self.migration_collection,
-            vec![0.0; 256], // Dummy query vector
-            search_params,
-        ).await?;
+        let results = self
+            .adapter
+            .search_similar(
+                &self.migration_collection,
+                vec![0.0; 256], // Dummy query vector
+                search_params,
+            )
+            .await?;
 
         let mut migrations = Vec::new();
         for result in results {
             if let Some(migration_data) = result.vector.metadata.get("migration") {
-                if let Ok(migration) = serde_json::from_value::<SchemaMigration>(migration_data.clone()) {
+                if let Ok(migration) =
+                    serde_json::from_value::<SchemaMigration>(migration_data.clone())
+                {
                     migrations.push(migration);
                 }
             }
@@ -295,9 +305,9 @@ where
         // Create temporary Pact file
         let temp_dir = TempDir::new()
             .map_err(|e| TylError::database(format!("Failed to create temp dir: {e}")))?;
-        
+
         let pact_file = temp_dir.path().join("contract.json");
-        
+
         // Generate Pact content
         let pact_content = self.generate_pact_content(contract)?;
         fs::write(&pact_file, pact_content)
@@ -348,33 +358,46 @@ where
         match interaction.request.operation {
             VectorOperation::CreateCollection => {
                 // Test collection creation
-                let test_config = CollectionConfig::new("test_migration", 128, DistanceMetric::Cosine)?;
+                let test_config =
+                    CollectionConfig::new("test_migration", 128, DistanceMetric::Cosine)?;
                 let result = self.adapter.create_collection(test_config).await;
                 self.validate_operation_result(result, &interaction.response)?;
-            },
+            }
             VectorOperation::StoreVector => {
                 // Test vector storage
                 let test_vector = Vector::new("test".to_string(), vec![0.0; 128]);
-                let result = self.adapter.store_vector(&interaction.request.collection, test_vector).await;
+                let result = self
+                    .adapter
+                    .store_vector(&interaction.request.collection, test_vector)
+                    .await;
                 self.validate_operation_result(result, &interaction.response)?;
-            },
+            }
             VectorOperation::SearchSimilar => {
                 // Test similarity search
                 let params = SearchParams::with_limit(5);
-                let result = self.adapter.search_similar(&interaction.request.collection, vec![0.0; 128], params).await;
+                let result = self
+                    .adapter
+                    .search_similar(&interaction.request.collection, vec![0.0; 128], params)
+                    .await;
                 match result {
                     Ok(_) => {
                         if !matches!(interaction.response.status, ResponseStatus::Success) {
-                            return Err(TylError::validation("pact", "Expected success but operation succeeded"));
+                            return Err(TylError::validation(
+                                "pact",
+                                "Expected success but operation succeeded",
+                            ));
                         }
-                    },
+                    }
                     Err(_) => {
                         if matches!(interaction.response.status, ResponseStatus::Success) {
-                            return Err(TylError::validation("pact", "Expected error but operation succeeded"));
+                            return Err(TylError::validation(
+                                "pact",
+                                "Expected error but operation succeeded",
+                            ));
                         }
                     }
                 }
-            },
+            }
             _ => {
                 // Add validation for other operations as needed
             }
@@ -383,26 +406,34 @@ where
         Ok(())
     }
 
-    fn validate_operation_result<R>(&self, result: TylResult<R>, expected_response: &VectorResponse) -> TylResult<()> {
+    fn validate_operation_result<R>(
+        &self,
+        result: TylResult<R>,
+        expected_response: &VectorResponse,
+    ) -> TylResult<()> {
         match (&result, &expected_response.status) {
             (Ok(_), ResponseStatus::Success) => Ok(()),
             (Err(_), ResponseStatus::Error) => Ok(()),
             (Err(_), ResponseStatus::NotFound) => Ok(()),
-            (Ok(_), ResponseStatus::Error) => {
-                Err(TylError::validation("pact", "Expected error but operation succeeded"))
-            },
-            (Ok(_), ResponseStatus::NotFound) => {
-                Err(TylError::validation("pact", "Expected not found but operation succeeded"))
-            },
-            (Err(_), ResponseStatus::Success) => {
-                Err(TylError::validation("pact", "Expected success but operation failed"))
-            },
+            (Ok(_), ResponseStatus::Error) => Err(TylError::validation(
+                "pact",
+                "Expected error but operation succeeded",
+            )),
+            (Ok(_), ResponseStatus::NotFound) => Err(TylError::validation(
+                "pact",
+                "Expected not found but operation succeeded",
+            )),
+            (Err(_), ResponseStatus::Success) => Err(TylError::validation(
+                "pact",
+                "Expected success but operation failed",
+            )),
         }
     }
 
     async fn validate_dependencies(&self, migration: &SchemaMigration) -> TylResult<()> {
         let history = self.get_migration_history().await?;
-        let applied_versions: std::collections::HashSet<_> = history.iter().map(|m| &m.version).collect();
+        let applied_versions: std::collections::HashSet<_> =
+            history.iter().map(|m| &m.version).collect();
 
         for dep in &migration.metadata.dependencies {
             if !applied_versions.contains(dep) {
@@ -421,41 +452,55 @@ where
             CollectionChange::CreateCollection(config) => {
                 self.adapter.create_collection(config.clone()).await?;
                 Ok(ChangeResult::CollectionCreated(config.name.clone()))
-            },
+            }
             CollectionChange::DeleteCollection(name) => {
                 self.adapter.delete_collection(name).await?;
                 Ok(ChangeResult::CollectionDeleted(name.clone()))
-            },
-            CollectionChange::UpdateCollection { name, dimension_change: _, distance_metric_change: _ } => {
+            }
+            CollectionChange::UpdateCollection {
+                name,
+                dimension_change: _,
+                distance_metric_change: _,
+            } => {
                 // Note: Qdrant doesn't support changing collection config after creation
                 // This would require data migration
                 Err(TylError::validation(
                     "update_collection",
-                    format!("Collection {} update not supported - requires manual migration", name),
+                    format!(
+                        "Collection {} update not supported - requires manual migration",
+                        name
+                    ),
                 ))
-            },
+            }
             CollectionChange::RenameCollection { old_name, new_name } => {
                 // Qdrant doesn't support renaming - would require recreation and data migration
                 Err(TylError::validation(
                     "rename_collection",
-                    format!("Collection rename from {} to {} requires manual migration", old_name, new_name),
+                    format!(
+                        "Collection rename from {} to {} requires manual migration",
+                        old_name, new_name
+                    ),
                 ))
-            },
-            CollectionChange::AddIndex { collection, field, index_type } => {
+            }
+            CollectionChange::AddIndex {
+                collection,
+                field,
+                index_type,
+            } => {
                 // Qdrant handles indexing automatically - this is mostly for documentation
                 Ok(ChangeResult::IndexAdded {
                     collection: collection.clone(),
                     field: field.clone(),
                     index_type: index_type.clone(),
                 })
-            },
+            }
             CollectionChange::RemoveIndex { collection, field } => {
                 // Qdrant handles indexing automatically - this is mostly for documentation
                 Ok(ChangeResult::IndexRemoved {
                     collection: collection.clone(),
                     field: field.clone(),
                 })
-            },
+            }
         }
     }
 
@@ -463,13 +508,11 @@ where
         match change {
             CollectionChange::CreateCollection(config) => {
                 self.adapter.delete_collection(&config.name).await
-            },
-            CollectionChange::DeleteCollection(name) => {
-                Err(TylError::validation(
-                    "rollback",
-                    format!("Cannot recreate deleted collection {} without backup", name),
-                ))
-            },
+            }
+            CollectionChange::DeleteCollection(name) => Err(TylError::validation(
+                "rollback",
+                format!("Cannot recreate deleted collection {} without backup", name),
+            )),
             _ => Ok(()), // Other changes are mostly metadata
         }
     }
@@ -485,12 +528,17 @@ where
             metadata,
         );
 
-        self.adapter.store_vector(&self.migration_collection, migration_vector).await
+        self.adapter
+            .store_vector(&self.migration_collection, migration_vector)
+            .await
     }
 
     async fn get_migration_record(&self, version: &semver::Version) -> TylResult<SchemaMigration> {
-        let vector = self.adapter.get_vector(&self.migration_collection, &version.to_string()).await?;
-        
+        let vector = self
+            .adapter
+            .get_vector(&self.migration_collection, &version.to_string())
+            .await?;
+
         if let Some(v) = vector {
             if let Some(migration_data) = v.metadata.get("migration") {
                 return serde_json::from_value(migration_data.clone())
@@ -502,7 +550,9 @@ where
     }
 
     async fn remove_migration_record(&self, version: &semver::Version) -> TylResult<()> {
-        self.adapter.delete_vector(&self.migration_collection, &version.to_string()).await
+        self.adapter
+            .delete_vector(&self.migration_collection, &version.to_string())
+            .await
     }
 }
 
@@ -520,9 +570,19 @@ pub enum ChangeResult {
     CollectionCreated(String),
     CollectionDeleted(String),
     CollectionUpdated(String),
-    CollectionRenamed { old: String, new: String },
-    IndexAdded { collection: String, field: String, index_type: IndexType },
-    IndexRemoved { collection: String, field: String },
+    CollectionRenamed {
+        old: String,
+        new: String,
+    },
+    IndexAdded {
+        collection: String,
+        field: String,
+        index_type: IndexType,
+    },
+    IndexRemoved {
+        collection: String,
+        field: String,
+    },
 }
 
 /// Migration builder for fluent API
@@ -583,13 +643,17 @@ impl MigrationBuilder {
 
     /// Add collection creation
     pub fn create_collection(mut self, config: CollectionConfig) -> Self {
-        self.migration.collection_changes.push(CollectionChange::CreateCollection(config));
+        self.migration
+            .collection_changes
+            .push(CollectionChange::CreateCollection(config));
         self
     }
 
     /// Add collection deletion
     pub fn delete_collection(mut self, name: String) -> Self {
-        self.migration.collection_changes.push(CollectionChange::DeleteCollection(name));
+        self.migration
+            .collection_changes
+            .push(CollectionChange::DeleteCollection(name));
         self
     }
 
@@ -615,7 +679,9 @@ mod tests {
         let migration = MigrationBuilder::new(version.clone(), "Initial schema".to_string())
             .author("Test Author".to_string())
             .description("Create initial collections".to_string())
-            .create_collection(CollectionConfig::new("documents", 768, DistanceMetric::Cosine).unwrap())
+            .create_collection(
+                CollectionConfig::new("documents", 768, DistanceMetric::Cosine).unwrap(),
+            )
             .build();
 
         assert_eq!(migration.version, version);
@@ -630,24 +696,22 @@ mod tests {
             consumer: "document-service".to_string(),
             provider: "qdrant-adapter".to_string(),
             contract_path: "./pacts/document-service-qdrant-adapter.json".to_string(),
-            interactions: vec![
-                PactInteraction {
-                    description: "create documents collection".to_string(),
-                    request: VectorRequest {
-                        operation: VectorOperation::CreateCollection,
-                        collection: "documents".to_string(),
-                        parameters: serde_json::json!({
-                            "dimension": 768,
-                            "distance_metric": "Cosine"
-                        }),
-                    },
-                    response: VectorResponse {
-                        status: ResponseStatus::Success,
-                        data: Some(serde_json::json!({"created": true})),
-                        error: None,
-                    },
-                }
-            ],
+            interactions: vec![PactInteraction {
+                description: "create documents collection".to_string(),
+                request: VectorRequest {
+                    operation: VectorOperation::CreateCollection,
+                    collection: "documents".to_string(),
+                    parameters: serde_json::json!({
+                        "dimension": 768,
+                        "distance_metric": "Cosine"
+                    }),
+                },
+                response: VectorResponse {
+                    status: ResponseStatus::Success,
+                    data: Some(serde_json::json!({"created": true})),
+                    error: None,
+                },
+            }],
         };
 
         assert_eq!(contract.consumer, "document-service");

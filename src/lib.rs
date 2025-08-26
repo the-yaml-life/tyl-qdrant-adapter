@@ -30,8 +30,8 @@
 //!
 //! // Create a collection
 //! let collection_config = CollectionConfig::new(
-//!     "documents", 
-//!     768, 
+//!     "documents",
+//!     768,
 //!     DistanceMetric::Cosine
 //! )?;
 //! adapter.create_collection(collection_config).await?;
@@ -52,29 +52,29 @@
 
 // Re-export TYL framework functionality following established patterns
 pub use tyl_vector_port::{
+    vector_config,
     // Error helpers
     vector_errors,
-    vector_config,
     // Core types
     CollectionConfig,
-    DistanceMetric,
-    SearchParams,
-    Vector,
-    VectorResult,
-    VectorSearchResult,
-    // Core traits
-    VectorCollectionManager,
-    VectorDatabase,
-    VectorStore,
-    VectorStoreHealth,
-    // Re-exports from TYL framework
-    TylError,
-    TylResult,
     // Database functionality
     DatabaseLifecycle,
     DatabaseResult,
+    DistanceMetric,
     HealthCheckResult,
     HealthStatus,
+    SearchParams,
+    // Re-exports from TYL framework
+    TylError,
+    TylResult,
+    Vector,
+    // Core traits
+    VectorCollectionManager,
+    VectorDatabase,
+    VectorResult,
+    VectorSearchResult,
+    VectorStore,
+    VectorStoreHealth,
 };
 
 // Import configuration functionality from tyl-config directly
@@ -82,34 +82,17 @@ pub use tyl_config::{ConfigPlugin, ConfigResult};
 
 // Import embedding functionality for text-to-vector conversion
 pub use tyl_embeddings_port::{
-    ContentType,
-    Embedding,
-    EmbeddingService,
-    EmbeddingResult,
-    embedding_errors,
+    embedding_errors, ContentType, Embedding, EmbeddingResult, EmbeddingService,
 };
 
 use async_trait::async_trait;
 use qdrant_client::{
     qdrant::{
-        Distance,
-        PointStruct,
-        VectorParams,
-        Filter,
-        UpsertPoints,
-        PointsSelector,
-        PointsIdsList,
-        PointId,
-        CreateCollection,
-        VectorsConfig,
-        WithPayloadSelector,
-        WithVectorsSelector,
-        GetPoints,
-        DeletePoints,
-        vectors_output,
+        vectors_output, CreateCollection, DeletePoints, Distance, Filter, GetPoints, PointId,
+        PointStruct, PointsIdsList, PointsSelector, UpsertPoints, VectorParams, VectorsConfig,
+        WithPayloadSelector, WithVectorsSelector,
     },
-    Qdrant,
-    Payload,
+    Payload, Qdrant,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -170,16 +153,28 @@ impl ConfigPlugin for QdrantConfig {
             return Err(TylError::validation("url", "Qdrant URL cannot be empty"));
         }
         if self.timeout_seconds == 0 {
-            return Err(TylError::validation("timeout_seconds", "Timeout must be greater than 0"));
+            return Err(TylError::validation(
+                "timeout_seconds",
+                "Timeout must be greater than 0",
+            ));
         }
         if self.max_batch_size == 0 {
-            return Err(TylError::validation("max_batch_size", "Max batch size must be greater than 0"));
+            return Err(TylError::validation(
+                "max_batch_size",
+                "Max batch size must be greater than 0",
+            ));
         }
         if self.default_shard_number == 0 {
-            return Err(TylError::validation("default_shard_number", "Shard number must be greater than 0"));
+            return Err(TylError::validation(
+                "default_shard_number",
+                "Shard number must be greater than 0",
+            ));
         }
         if self.default_replication_factor == 0 {
-            return Err(TylError::validation("default_replication_factor", "Replication factor must be greater than 0"));
+            return Err(TylError::validation(
+                "default_replication_factor",
+                "Replication factor must be greater than 0",
+            ));
         }
         Ok(())
     }
@@ -207,30 +202,35 @@ impl ConfigPlugin for QdrantConfig {
 
         // Timeout
         if let Ok(timeout) = std::env::var("TYL_QDRANT_TIMEOUT_SECONDS") {
-            self.timeout_seconds = timeout.parse()
+            self.timeout_seconds = timeout
+                .parse()
                 .map_err(|_| TylError::configuration("Invalid TYL_QDRANT_TIMEOUT_SECONDS"))?;
         }
 
         // Batch size
         if let Ok(batch_size) = std::env::var("TYL_QDRANT_MAX_BATCH_SIZE") {
-            self.max_batch_size = batch_size.parse()
+            self.max_batch_size = batch_size
+                .parse()
                 .map_err(|_| TylError::configuration("Invalid TYL_QDRANT_MAX_BATCH_SIZE"))?;
         }
 
         // Compression
         if let Ok(compression) = std::env::var("TYL_QDRANT_ENABLE_COMPRESSION") {
-            self.enable_compression = compression.parse()
+            self.enable_compression = compression
+                .parse()
                 .map_err(|_| TylError::configuration("Invalid TYL_QDRANT_ENABLE_COMPRESSION"))?;
         }
 
         // Retry settings
         if let Ok(attempts) = std::env::var("TYL_QDRANT_RETRY_ATTEMPTS") {
-            self.retry_attempts = attempts.parse()
+            self.retry_attempts = attempts
+                .parse()
                 .map_err(|_| TylError::configuration("Invalid TYL_QDRANT_RETRY_ATTEMPTS"))?;
         }
 
         if let Ok(delay) = std::env::var("TYL_QDRANT_RETRY_DELAY_MS") {
-            self.retry_delay_ms = delay.parse()
+            self.retry_delay_ms = delay
+                .parse()
                 .map_err(|_| TylError::configuration("Invalid TYL_QDRANT_RETRY_DELAY_MS"))?;
         }
 
@@ -248,49 +248,54 @@ pub struct QdrantAdapter {
 
 impl QdrantAdapter {
     /// Helper macro for error mapping to reduce duplication
-    fn map_qdrant_error<T, E: std::fmt::Display>(result: Result<T, E>, context: &str) -> VectorResult<T> {
+    fn map_qdrant_error<T, E: std::fmt::Display>(
+        result: Result<T, E>,
+        context: &str,
+    ) -> VectorResult<T> {
         result.map_err(|e| vector_errors::storage_failed(format!("{context}: {e}")))
     }
 
     /// Helper for common telemetry (logging + tracing) operations
-    async fn with_telemetry<F, T>(&self, operation: &str, context: &str, operation_fn: F) -> TylResult<T>
+    async fn with_telemetry<F, T>(
+        &self,
+        operation: &str,
+        context: &str,
+        operation_fn: F,
+    ) -> TylResult<T>
     where
         F: std::future::Future<Output = TylResult<T>>,
     {
         let span_id = Self::map_qdrant_error(
             self.tracer.start_span(operation, None),
-            "Failed to start trace"
+            "Failed to start trace",
         )?;
-        
+
         let start_time = Instant::now();
         let record = LogRecord::new(LogLevel::Info, format!("{operation} - {context}"));
         self.logger.log(&record);
-        
+
         let result = operation_fn.await;
-        
+
         let duration = start_time.elapsed();
         match &result {
             Ok(_) => {
                 let success_record = LogRecord::new(
-                    LogLevel::Info, 
-                    format!("Completed {operation} in {duration:?} - {context}")
+                    LogLevel::Info,
+                    format!("Completed {operation} in {duration:?} - {context}"),
                 );
                 self.logger.log(&success_record);
             }
             Err(e) => {
                 let error_record = LogRecord::new(
-                    LogLevel::Error, 
-                    format!("Failed {operation} in {duration:?} - {context}: {e}")
+                    LogLevel::Error,
+                    format!("Failed {operation} in {duration:?} - {context}: {e}"),
                 );
                 self.logger.log(&error_record);
             }
         }
-        
-        Self::map_qdrant_error(
-            self.tracer.end_span(span_id),
-            "Failed to end trace"
-        )?;
-        
+
+        Self::map_qdrant_error(self.tracer.end_span(span_id), "Failed to end trace")?;
+
         result
     }
 
@@ -299,15 +304,16 @@ impl QdrantAdapter {
         config.validate()?;
 
         // Create Qdrant client using new API
-        let mut client_builder = Qdrant::from_url(&config.url)
-            .timeout(Duration::from_secs(config.timeout_seconds));
+        let mut client_builder =
+            Qdrant::from_url(&config.url).timeout(Duration::from_secs(config.timeout_seconds));
 
         if let Some(api_key) = &config.api_key {
             client_builder = client_builder.api_key(api_key.clone());
         }
 
-        let client = client_builder.build()
-            .map_err(|e| vector_errors::connection_failed(format!("Failed to create Qdrant client: {e}")))?;
+        let client = client_builder.build().map_err(|e| {
+            vector_errors::connection_failed(format!("Failed to create Qdrant client: {e}"))
+        })?;
 
         let logger = JsonLogger::new();
         let tracer = SimpleTracer::new(TraceConfig::new("tyl-qdrant-adapter"));
@@ -332,13 +338,16 @@ impl QdrantAdapter {
             Err(e) => {
                 let error_str = e.to_string();
                 // If it's just a compatibility check warning, try to continue
-                if error_str.contains("check client-server compatibility") || 
-                   error_str.contains("Set check_compatibility=false") {
+                if error_str.contains("check client-server compatibility")
+                    || error_str.contains("Set check_compatibility=false")
+                {
                     println!("⚠️  Version compatibility warning: {error_str}");
                     // Don't fail on compatibility warnings, just log them
                     Ok(())
                 } else {
-                    Err(vector_errors::connection_failed(format!("Qdrant health check failed: {e}")))
+                    Err(vector_errors::connection_failed(format!(
+                        "Qdrant health check failed: {e}"
+                    )))
                 }
             }
         }
@@ -360,34 +369,35 @@ impl QdrantAdapter {
             serde_json::Value::String(s) => qdrant_client::qdrant::value::Kind::StringValue(s),
             serde_json::Value::Number(n) if n.is_i64() => {
                 qdrant_client::qdrant::value::Kind::IntegerValue(n.as_i64()?)
-            },
+            }
             serde_json::Value::Number(n) if n.is_f64() => {
                 qdrant_client::qdrant::value::Kind::DoubleValue(n.as_f64()?)
-            },
+            }
             serde_json::Value::Bool(b) => qdrant_client::qdrant::value::Kind::BoolValue(b),
             _ => return None, // Skip unsupported types
         };
-        
+
         Some(qdrant_client::qdrant::Value { kind: Some(kind) })
     }
 
     /// Convert TYL Vector to Qdrant PointStruct (necessary for adapter pattern)
     fn vector_to_point_struct(vector: Vector) -> PointStruct {
         let mut payload = Payload::new();
-        
+
         for (key, value) in vector.metadata {
             if let Some(qdrant_value) = Self::json_to_qdrant_value(value) {
                 payload.insert(key, qdrant_value);
             }
         }
-        
+
         PointStruct::new(vector.id, vector.embedding, payload)
     }
 
     /// Extract point ID from Qdrant point - helper for point conversion
     fn extract_point_id(point_id: Option<qdrant_client::qdrant::PointId>) -> VectorResult<String> {
-        let point_id = point_id.ok_or_else(|| vector_errors::vector_not_found("missing point ID"))?;
-        
+        let point_id =
+            point_id.ok_or_else(|| vector_errors::vector_not_found("missing point ID"))?;
+
         match point_id.point_id_options {
             Some(qdrant_client::qdrant::point_id::PointIdOptions::Uuid(uuid)) => Ok(uuid),
             Some(qdrant_client::qdrant::point_id::PointIdOptions::Num(num)) => Ok(num.to_string()),
@@ -396,9 +406,12 @@ impl QdrantAdapter {
     }
 
     /// Extract vector data from Qdrant vectors - helper for point conversion
-    fn extract_vector_data(vectors: Option<qdrant_client::qdrant::VectorsOutput>) -> VectorResult<Vec<f32>> {
-        let vectors = vectors.ok_or_else(|| vector_errors::storage_failed("Missing vector data"))?;
-        
+    fn extract_vector_data(
+        vectors: Option<qdrant_client::qdrant::VectorsOutput>,
+    ) -> VectorResult<Vec<f32>> {
+        let vectors =
+            vectors.ok_or_else(|| vector_errors::storage_failed("Missing vector data"))?;
+
         match vectors.vectors_options {
             Some(vectors_output::VectorsOptions::Vector(vector_data)) => Ok(vector_data.data),
             _ => Err(vector_errors::storage_failed("Invalid vector format")),
@@ -408,11 +421,15 @@ impl QdrantAdapter {
     /// Convert Qdrant value to JSON value - helper for metadata conversion
     fn qdrant_to_json_value(value: qdrant_client::qdrant::Value) -> Option<serde_json::Value> {
         match value.kind? {
-            qdrant_client::qdrant::value::Kind::StringValue(s) => Some(serde_json::Value::String(s)),
-            qdrant_client::qdrant::value::Kind::IntegerValue(i) => Some(serde_json::Value::Number(serde_json::Number::from(i))),
+            qdrant_client::qdrant::value::Kind::StringValue(s) => {
+                Some(serde_json::Value::String(s))
+            }
+            qdrant_client::qdrant::value::Kind::IntegerValue(i) => {
+                Some(serde_json::Value::Number(serde_json::Number::from(i)))
+            }
             qdrant_client::qdrant::value::Kind::DoubleValue(d) => {
                 serde_json::Number::from_f64(d).map(serde_json::Value::Number)
-            },
+            }
             qdrant_client::qdrant::value::Kind::BoolValue(b) => Some(serde_json::Value::Bool(b)),
             _ => None, // Skip unsupported types
         }
@@ -422,7 +439,7 @@ impl QdrantAdapter {
     fn point_to_vector(point: qdrant_client::qdrant::ScoredPoint) -> VectorResult<Vector> {
         let id = Self::extract_point_id(point.id)?;
         let embedding = Self::extract_vector_data(point.vectors)?;
-        
+
         let mut metadata = HashMap::new();
         for (key, value) in point.payload {
             if let Some(json_value) = Self::qdrant_to_json_value(value) {
@@ -430,49 +447,34 @@ impl QdrantAdapter {
             }
         }
 
-        Ok(Vector { id, embedding, metadata })
+        Ok(Vector {
+            id,
+            embedding,
+            metadata,
+        })
     }
 
     /// Build Qdrant filter from search parameters with sophisticated filtering
     fn build_filter(params: &SearchParams) -> Option<Filter> {
-        use qdrant_client::qdrant::{Condition, Filter, FieldCondition, Match};
-        
+        use qdrant_client::qdrant::{Condition, FieldCondition, Filter, Match};
+
         if params.filters.is_empty() {
             return None;
         }
-        
+
         let mut must_conditions = Vec::new();
-        
+
         for (field, value) in &params.filters {
             let condition = match value {
                 serde_json::Value::String(s) => {
                     let match_value = Match {
-                        match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Keyword(s.clone())),
+                        match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Keyword(
+                            s.clone(),
+                        )),
                     };
                     Condition {
-                        condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
-                            FieldCondition {
-                                key: field.clone(),
-                                r#match: Some(match_value),
-                                range: None,
-                                geo_bounding_box: None,
-                                geo_radius: None,
-                                geo_polygon: None,
-                                values_count: None,
-                                is_empty: None,
-                                is_null: None,
-                                datetime_range: None,
-                            }
-                        )),
-                    }
-                },
-                serde_json::Value::Number(n) => {
-                    if let Some(int_val) = n.as_i64() {
-                        let match_value = Match {
-                            match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Integer(int_val)),
-                        };
-                        Condition {
-                            condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                        condition_one_of: Some(
+                            qdrant_client::qdrant::condition::ConditionOneOf::Field(
                                 FieldCondition {
                                     key: field.clone(),
                                     r#match: Some(match_value),
@@ -484,17 +486,73 @@ impl QdrantAdapter {
                                     is_empty: None,
                                     is_null: None,
                                     datetime_range: None,
-                                }
+                                },
+                            ),
+                        ),
+                    }
+                }
+                serde_json::Value::Number(n) => {
+                    if let Some(int_val) = n.as_i64() {
+                        let match_value = Match {
+                            match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Integer(
+                                int_val,
                             )),
+                        };
+                        Condition {
+                            condition_one_of: Some(
+                                qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                                    FieldCondition {
+                                        key: field.clone(),
+                                        r#match: Some(match_value),
+                                        range: None,
+                                        geo_bounding_box: None,
+                                        geo_radius: None,
+                                        geo_polygon: None,
+                                        values_count: None,
+                                        is_empty: None,
+                                        is_null: None,
+                                        datetime_range: None,
+                                    },
+                                ),
+                            ),
                         }
                     } else if let Some(float_val) = n.as_f64() {
                         // For range queries, we use exact match for now
                         // TODO: Support range filtering with proper Range struct
                         let match_value = Match {
-                            match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Integer(float_val as i64)),
+                            match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Integer(
+                                float_val as i64,
+                            )),
                         };
                         Condition {
-                            condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                            condition_one_of: Some(
+                                qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                                    FieldCondition {
+                                        key: field.clone(),
+                                        r#match: Some(match_value),
+                                        range: None,
+                                        geo_bounding_box: None,
+                                        geo_radius: None,
+                                        geo_polygon: None,
+                                        values_count: None,
+                                        is_empty: None,
+                                        is_null: None,
+                                        datetime_range: None,
+                                    },
+                                ),
+                            ),
+                        }
+                    } else {
+                        continue; // Skip unsupported number types
+                    }
+                }
+                serde_json::Value::Bool(b) => {
+                    let match_value = Match {
+                        match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Boolean(*b)),
+                    };
+                    Condition {
+                        condition_one_of: Some(
+                            qdrant_client::qdrant::condition::ConditionOneOf::Field(
                                 FieldCondition {
                                     key: field.clone(),
                                     r#match: Some(match_value),
@@ -506,44 +564,21 @@ impl QdrantAdapter {
                                     is_empty: None,
                                     is_null: None,
                                     datetime_range: None,
-                                }
-                            )),
-                        }
-                    } else {
-                        continue; // Skip unsupported number types
+                                },
+                            ),
+                        ),
                     }
-                },
-                serde_json::Value::Bool(b) => {
-                    let match_value = Match {
-                        match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Boolean(*b)),
-                    };
-                    Condition {
-                        condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
-                            FieldCondition {
-                                key: field.clone(),
-                                r#match: Some(match_value),
-                                range: None,
-                                geo_bounding_box: None,
-                                geo_radius: None,
-                                geo_polygon: None,
-                                values_count: None,
-                                is_empty: None,
-                                is_null: None,
-                                datetime_range: None,
-                            }
-                        )),
-                    }
-                },
+                }
                 _ => continue, // Skip unsupported value types
             };
-            
+
             must_conditions.push(condition);
         }
-        
+
         if must_conditions.is_empty() {
             return None;
         }
-        
+
         Some(Filter {
             should: Vec::new(),
             must: must_conditions,
@@ -551,22 +586,22 @@ impl QdrantAdapter {
             min_should: None,
         })
     }
-    
+
     /// Build range filter for numeric fields
     pub fn build_range_filter(field: &str, min: Option<f64>, max: Option<f64>) -> Option<Filter> {
-        use qdrant_client::qdrant::{Condition, Filter, FieldCondition, Range};
-        
+        use qdrant_client::qdrant::{Condition, FieldCondition, Filter, Range};
+
         if min.is_none() && max.is_none() {
             return None;
         }
-        
+
         let range = Range {
             lt: max,
             gt: min,
             gte: None,
             lte: None,
         };
-        
+
         let condition = Condition {
             condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
                 FieldCondition {
@@ -580,10 +615,10 @@ impl QdrantAdapter {
                     is_empty: None,
                     is_null: None,
                     datetime_range: None,
-                }
+                },
             )),
         };
-        
+
         Some(Filter {
             should: Vec::new(),
             must: vec![condition],
@@ -591,53 +626,64 @@ impl QdrantAdapter {
             min_should: None,
         })
     }
-    
+
     /// Build complex filter combining multiple conditions with logical operators
     pub fn build_complex_filter(
         must_conditions: Vec<(String, serde_json::Value)>,
         should_conditions: Vec<(String, serde_json::Value)>,
         must_not_conditions: Vec<(String, serde_json::Value)>,
     ) -> Option<Filter> {
-        use qdrant_client::qdrant::{Condition, Filter, FieldCondition, Match};
-        
+        use qdrant_client::qdrant::{Condition, FieldCondition, Filter, Match};
+
         let build_condition_list = |conditions: &[(String, serde_json::Value)]| -> Vec<Condition> {
-            conditions.iter().filter_map(|(field, value)| {
-                let match_value = match value {
-                    serde_json::Value::String(s) => Some(qdrant_client::qdrant::r#match::MatchValue::Keyword(s.clone())),
-                    serde_json::Value::Number(n) if n.is_i64() => Some(qdrant_client::qdrant::r#match::MatchValue::Integer(n.as_i64()?)),
-                    serde_json::Value::Bool(b) => Some(qdrant_client::qdrant::r#match::MatchValue::Boolean(*b)),
-                    _ => None,
-                }?;
-                
-                Some(Condition {
-                    condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
-                        FieldCondition {
-                            key: field.clone(),
-                            r#match: Some(Match {
-                                match_value: Some(match_value),
-                            }),
-                            range: None,
-                            geo_bounding_box: None,
-                            geo_radius: None,
-                            geo_polygon: None,
-                            values_count: None,
-                            is_empty: None,
-                            is_null: None,
-                            datetime_range: None,
+            conditions
+                .iter()
+                .filter_map(|(field, value)| {
+                    let match_value = match value {
+                        serde_json::Value::String(s) => Some(
+                            qdrant_client::qdrant::r#match::MatchValue::Keyword(s.clone()),
+                        ),
+                        serde_json::Value::Number(n) if n.is_i64() => Some(
+                            qdrant_client::qdrant::r#match::MatchValue::Integer(n.as_i64()?),
+                        ),
+                        serde_json::Value::Bool(b) => {
+                            Some(qdrant_client::qdrant::r#match::MatchValue::Boolean(*b))
                         }
-                    )),
+                        _ => None,
+                    }?;
+
+                    Some(Condition {
+                        condition_one_of: Some(
+                            qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                                FieldCondition {
+                                    key: field.clone(),
+                                    r#match: Some(Match {
+                                        match_value: Some(match_value),
+                                    }),
+                                    range: None,
+                                    geo_bounding_box: None,
+                                    geo_radius: None,
+                                    geo_polygon: None,
+                                    values_count: None,
+                                    is_empty: None,
+                                    is_null: None,
+                                    datetime_range: None,
+                                },
+                            ),
+                        ),
+                    })
                 })
-            }).collect()
+                .collect()
         };
-        
+
         let must = build_condition_list(&must_conditions);
         let should = build_condition_list(&should_conditions);
         let must_not = build_condition_list(&must_not_conditions);
-        
+
         if must.is_empty() && should.is_empty() && must_not.is_empty() {
             return None;
         }
-        
+
         Some(Filter {
             must,
             should,
@@ -653,25 +699,28 @@ impl VectorStore for QdrantAdapter {
     async fn store_vector(&self, collection: &str, vector: Vector) -> TylResult<()> {
         let vector_id = vector.id.clone();
         let context = format!("Storing vector '{vector_id}' in collection '{collection}'");
-        
+
         self.with_telemetry("qdrant_store_vector", &context, async {
             let point = Self::vector_to_point_struct(vector);
-            
+
             let response = Self::map_qdrant_error(
-                self.client.upsert_points(UpsertPoints {
-                    collection_name: collection.to_string(),
-                    points: vec![point],
-                    ..Default::default()
-                }).await,
-                "Failed to store vector"
+                self.client
+                    .upsert_points(UpsertPoints {
+                        collection_name: collection.to_string(),
+                        points: vec![point],
+                        ..Default::default()
+                    })
+                    .await,
+                "Failed to store vector",
             )?;
 
             if response.result.is_none() {
                 return Err(vector_errors::storage_failed("No response from Qdrant"));
             }
-            
+
             Ok(())
-        }).await
+        })
+        .await
     }
 
     /// Store multiple vectors in batch
@@ -683,16 +732,22 @@ impl VectorStore for QdrantAdapter {
         if vectors.len() > self.config.max_batch_size {
             return Err(TylError::validation(
                 "batch_size",
-                format!("Batch size {} exceeds maximum {}", vectors.len(), self.config.max_batch_size),
+                format!(
+                    "Batch size {} exceeds maximum {}",
+                    vectors.len(),
+                    self.config.max_batch_size
+                ),
             ));
         }
 
-        let points: Vec<PointStruct> = vectors.into_iter()
+        let points: Vec<PointStruct> = vectors
+            .into_iter()
             .map(Self::vector_to_point_struct)
             .collect();
 
         let point_count = points.len();
-        let response = self.client
+        let response = self
+            .client
             .upsert_points(qdrant_client::qdrant::UpsertPoints {
                 collection_name: collection.to_string(),
                 points,
@@ -703,9 +758,7 @@ impl VectorStore for QdrantAdapter {
 
         // Qdrant returns success for all or fails for all
         match response.result {
-            Some(_) => {
-                Ok(vec![Ok(()); point_count])
-            },
+            Some(_) => Ok(vec![Ok(()); point_count]),
             None => {
                 let error = vector_errors::storage_failed("Batch storage failed");
                 Ok(vec![Err(error); point_count])
@@ -719,20 +772,24 @@ impl VectorStore for QdrantAdapter {
             collection_name: collection.to_string(),
             ids: vec![qdrant_client::qdrant::PointId::from(id.to_string())],
             with_payload: Some(WithPayloadSelector {
-                selector_options: Some(qdrant_client::qdrant::with_payload_selector::SelectorOptions::Enable(true)),
+                selector_options: Some(
+                    qdrant_client::qdrant::with_payload_selector::SelectorOptions::Enable(true),
+                ),
             }),
             with_vectors: Some(WithVectorsSelector {
-                selector_options: Some(qdrant_client::qdrant::with_vectors_selector::SelectorOptions::Enable(true)),
+                selector_options: Some(
+                    qdrant_client::qdrant::with_vectors_selector::SelectorOptions::Enable(true),
+                ),
             }),
             read_consistency: None,
             shard_key_selector: None,
             timeout: None,
         };
-        
-        let points = self.client
-            .get_points(get_points)
-            .await
-            .map_err(|e| vector_errors::vector_not_found(format!("Failed to get vector: {e}")))?;
+
+        let points =
+            self.client.get_points(get_points).await.map_err(|e| {
+                vector_errors::vector_not_found(format!("Failed to get vector: {e}"))
+            })?;
 
         if let Some(point) = points.result.into_iter().next() {
             let scored_point = qdrant_client::qdrant::ScoredPoint {
@@ -757,11 +814,14 @@ impl VectorStore for QdrantAdapter {
         query_vector: Vec<f32>,
         params: SearchParams,
     ) -> TylResult<Vec<VectorSearchResult>> {
-        let context = format!("Searching similar vectors in collection '{collection}' with limit {}", params.limit);
-        
+        let context = format!(
+            "Searching similar vectors in collection '{collection}' with limit {}",
+            params.limit
+        );
+
         self.with_telemetry("qdrant_search_similar", &context, async {
             let filter = Self::build_filter(&params);
-            
+
             let search_points = qdrant_client::qdrant::SearchPoints {
                 collection_name: collection.to_string(),
                 vector: query_vector,
@@ -769,17 +829,23 @@ impl VectorStore for QdrantAdapter {
                 score_threshold: params.threshold,
                 filter,
                 with_payload: Some(qdrant_client::qdrant::WithPayloadSelector {
-                    selector_options: Some(qdrant_client::qdrant::with_payload_selector::SelectorOptions::Enable(true)),
+                    selector_options: Some(
+                        qdrant_client::qdrant::with_payload_selector::SelectorOptions::Enable(true),
+                    ),
                 }),
                 with_vectors: Some(qdrant_client::qdrant::WithVectorsSelector {
-                    selector_options: Some(qdrant_client::qdrant::with_vectors_selector::SelectorOptions::Enable(params.include_vectors)),
+                    selector_options: Some(
+                        qdrant_client::qdrant::with_vectors_selector::SelectorOptions::Enable(
+                            params.include_vectors,
+                        ),
+                    ),
                 }),
                 ..Default::default()
             };
 
             let response = Self::map_qdrant_error(
                 self.client.search_points(search_points).await,
-                "Search failed"
+                "Search failed",
             )?;
 
             let mut results = Vec::new();
@@ -788,9 +854,10 @@ impl VectorStore for QdrantAdapter {
                 let result = VectorSearchResult::new(vector, point.score);
                 results.push(result);
             }
-            
+
             Ok(results)
-        }).await
+        })
+        .await
     }
 
     /// Delete a vector by ID
@@ -800,8 +867,8 @@ impl VectorStore for QdrantAdapter {
                 qdrant_client::qdrant::points_selector::PointsSelectorOneOf::Points(
                     PointsIdsList {
                         ids: vec![PointId::from(id.to_string())],
-                    }
-                )
+                    },
+                ),
             ),
         };
 
@@ -812,8 +879,9 @@ impl VectorStore for QdrantAdapter {
             shard_key_selector: None,
             ordering: None,
         };
-        
-        let response = self.client
+
+        let response = self
+            .client
             .delete_points(delete_points)
             .await
             .map_err(|e| vector_errors::storage_failed(format!("Failed to delete vector: {e}")))?;
@@ -826,15 +894,13 @@ impl VectorStore for QdrantAdapter {
 
     /// Delete multiple vectors by IDs
     async fn delete_vectors_batch(&self, collection: &str, ids: Vec<String>) -> TylResult<()> {
-        let point_ids: Vec<PointId> = ids.into_iter()
-            .map(PointId::from)
-            .collect();
+        let point_ids: Vec<PointId> = ids.into_iter().map(PointId::from).collect();
 
         let points_selector = PointsSelector {
             points_selector_one_of: Some(
                 qdrant_client::qdrant::points_selector::PointsSelectorOneOf::Points(
-                    PointsIdsList { ids: point_ids }
-                )
+                    PointsIdsList { ids: point_ids },
+                ),
             ),
         };
 
@@ -845,8 +911,9 @@ impl VectorStore for QdrantAdapter {
             shard_key_selector: None,
             ordering: None,
         };
-        
-        let response = self.client
+
+        let response = self
+            .client
             .delete_points(delete_points)
             .await
             .map_err(|e| vector_errors::storage_failed(format!("Failed to delete vectors: {e}")))?;
@@ -874,7 +941,7 @@ impl VectorCollectionManager for QdrantAdapter {
                     on_disk: None,
                     datatype: None,
                     multivector_config: None,
-                }
+                },
             )),
         };
 
@@ -886,12 +953,16 @@ impl VectorCollectionManager for QdrantAdapter {
             ..Default::default()
         };
 
-        let response = self.client
+        let response = self
+            .client
             .create_collection(create_collection)
             .await
             .map_err(|e| {
                 if e.to_string().contains("already exists") {
-                    vector_errors::storage_failed(format!("Collection '{}' already exists", config.name))
+                    vector_errors::storage_failed(format!(
+                        "Collection '{}' already exists",
+                        config.name
+                    ))
                 } else {
                     vector_errors::storage_failed(format!("Failed to create collection: {e}"))
                 }
@@ -905,10 +976,13 @@ impl VectorCollectionManager for QdrantAdapter {
 
     /// Delete a collection
     async fn delete_collection(&self, collection_name: &str) -> TylResult<()> {
-        let response = self.client
+        let response = self
+            .client
             .delete_collection(collection_name)
             .await
-            .map_err(|e| vector_errors::storage_failed(format!("Failed to delete collection: {e}")))?;
+            .map_err(|e| {
+                vector_errors::storage_failed(format!("Failed to delete collection: {e}"))
+            })?;
 
         if !response.result {
             return Err(vector_errors::collection_not_found(collection_name));
@@ -918,10 +992,9 @@ impl VectorCollectionManager for QdrantAdapter {
 
     /// List all collections
     async fn list_collections(&self) -> TylResult<Vec<CollectionConfig>> {
-        let response = self.client
-            .list_collections()
-            .await
-            .map_err(|e| vector_errors::storage_failed(format!("Failed to list collections: {e}")))?;
+        let response = self.client.list_collections().await.map_err(|e| {
+            vector_errors::storage_failed(format!("Failed to list collections: {e}"))
+        })?;
 
         let mut configs = Vec::new();
         for collection_description in response.collections {
@@ -933,8 +1006,12 @@ impl VectorCollectionManager for QdrantAdapter {
     }
 
     /// Get collection information
-    async fn get_collection_info(&self, collection_name: &str) -> TylResult<Option<CollectionConfig>> {
-        let info = self.client
+    async fn get_collection_info(
+        &self,
+        collection_name: &str,
+    ) -> TylResult<Option<CollectionConfig>> {
+        let info = self
+            .client
             .collection_info(collection_name)
             .await
             .map_err(|e| {
@@ -957,13 +1034,17 @@ impl VectorCollectionManager for QdrantAdapter {
                                 _ => DistanceMetric::Cosine,
                             };
                             (distance, params.size as usize)
-                        },
+                        }
                         _ => (DistanceMetric::Cosine, 768),
                     },
                     _ => (DistanceMetric::Cosine, 768),
                 };
 
-                let config = CollectionConfig::new_unchecked(collection_name.to_string(), dimension, distance_metric);
+                let config = CollectionConfig::new_unchecked(
+                    collection_name.to_string(),
+                    dimension,
+                    distance_metric,
+                );
                 return Ok(Some(config));
             }
         }
@@ -971,19 +1052,31 @@ impl VectorCollectionManager for QdrantAdapter {
     }
 
     /// Get collection statistics
-    async fn get_collection_stats(&self, collection_name: &str) -> TylResult<HashMap<String, serde_json::Value>> {
-        let info = self.client
+    async fn get_collection_stats(
+        &self,
+        collection_name: &str,
+    ) -> TylResult<HashMap<String, serde_json::Value>> {
+        let info = self
+            .client
             .collection_info(collection_name)
             .await
-            .map_err(|e| vector_errors::collection_not_found(format!("Collection info failed: {e}")))?;
+            .map_err(|e| {
+                vector_errors::collection_not_found(format!("Collection info failed: {e}"))
+            })?;
 
         let mut stats = HashMap::new();
         if let Some(result) = info.result {
             stats.insert("status".to_string(), serde_json::json!(result.status));
             if let Some(vectors_count) = result.vectors_count {
-                stats.insert("vectors_count".to_string(), serde_json::json!(vectors_count));
+                stats.insert(
+                    "vectors_count".to_string(),
+                    serde_json::json!(vectors_count),
+                );
             }
-            stats.insert("segments_count".to_string(), serde_json::json!(result.segments_count));
+            stats.insert(
+                "segments_count".to_string(),
+                serde_json::json!(result.segments_count),
+            );
         }
         Ok(stats)
     }
@@ -1002,7 +1095,7 @@ impl VectorStoreHealth for QdrantAdapter {
     /// Get detailed health information
     async fn health_check(&self) -> TylResult<HashMap<String, serde_json::Value>> {
         let mut health_data = HashMap::new();
-        
+
         match self.client.health_check().await {
             Ok(_) => {
                 health_data.insert("status".to_string(), serde_json::json!("healthy"));
@@ -1043,7 +1136,10 @@ impl VectorDatabase for QdrantAdapter {
 
     /// Check feature support
     fn supports_feature(&self, feature: &str) -> bool {
-        matches!(feature, "collections" | "health_check" | "batch_operations" | "filtering" | "payload")
+        matches!(
+            feature,
+            "collections" | "health_check" | "batch_operations" | "filtering" | "payload"
+        )
     }
 }
 
@@ -1062,40 +1158,52 @@ pub mod qdrant_errors {
         let message = message.into();
         TylError::network(format!("Qdrant API error: {message}"))
     }
-    
+
     /// Collection creation failed with specific reason
     pub fn collection_creation_failed(name: &str, reason: impl Into<String>) -> TylError {
         let reason = reason.into();
-        TylError::database(format!("Failed to create Qdrant collection '{name}': {reason}"))
+        TylError::database(format!(
+            "Failed to create Qdrant collection '{name}': {reason}"
+        ))
     }
-    
+
     /// Vector dimension mismatch error
     pub fn vector_dimension_mismatch(expected: usize, actual: usize) -> TylError {
-        TylError::validation("vector_dimension", format!("Expected {expected}, got {actual}"))
+        TylError::validation(
+            "vector_dimension",
+            format!("Expected {expected}, got {actual}"),
+        )
     }
-    
+
     /// Index optimization failed
     pub fn index_optimization_failed(collection: &str, reason: impl Into<String>) -> TylError {
         let reason = reason.into();
-        TylError::database(format!("Index optimization failed for collection '{collection}': {reason}"))
+        TylError::database(format!(
+            "Index optimization failed for collection '{collection}': {reason}"
+        ))
     }
-    
+
     /// Collection not ready for operations
     pub fn collection_not_ready(collection: &str, status: &str) -> TylError {
-        TylError::database(format!("Collection '{collection}' is not ready (status: {status})"))
+        TylError::database(format!(
+            "Collection '{collection}' is not ready (status: {status})"
+        ))
     }
-    
+
     /// Batch operation validation error
     pub fn batch_size_exceeded(size: usize, max_size: usize) -> TylError {
-        TylError::validation("batch_size", format!("Size {size} exceeds maximum {max_size}"))
+        TylError::validation(
+            "batch_size",
+            format!("Size {size} exceeds maximum {max_size}"),
+        )
     }
-    
+
     /// Point ID conversion error
     pub fn invalid_point_id(id: &str, reason: impl Into<String>) -> TylError {
         let reason = reason.into();
         TylError::validation("point_id", format!("Invalid ID '{id}': {reason}"))
     }
-    
+
     /// Search parameter validation error
     pub fn invalid_search_params(reason: impl Into<String>) -> TylError {
         TylError::validation("search_params", reason.into())
@@ -1171,9 +1279,9 @@ mod tests {
     fn test_vector_to_point_conversion() {
         let mut vector = Vector::new("test-id", vec![0.1, 0.2, 0.3]);
         vector.add_metadata("category", serde_json::json!("test"));
-        
+
         let point = QdrantAdapter::vector_to_point_struct(vector.clone());
-        
+
         // Verify the conversion worked (basic checks without deep inspection)
         assert!(!point.payload.is_empty());
         assert!(point.payload.contains_key("category"));
@@ -1215,16 +1323,21 @@ mod tests {
         let api_error = qdrant_errors::api_error("invalid request");
         assert!(api_error.to_string().contains("Qdrant API error"));
         assert!(api_error.to_string().contains("invalid request"));
-        
+
         // Test enhanced error helpers
         let dim_error = qdrant_errors::vector_dimension_mismatch(768, 512);
         assert!(dim_error.to_string().contains("Expected 768, got 512"));
-        
+
         let batch_error = qdrant_errors::batch_size_exceeded(1000, 100);
-        assert!(batch_error.to_string().contains("Size 1000 exceeds maximum 100"));
-        
-        let collection_error = qdrant_errors::collection_creation_failed("docs", "Permission denied");
-        assert!(collection_error.to_string().contains("create Qdrant collection 'docs'"));
+        assert!(batch_error
+            .to_string()
+            .contains("Size 1000 exceeds maximum 100"));
+
+        let collection_error =
+            qdrant_errors::collection_creation_failed("docs", "Permission denied");
+        assert!(collection_error
+            .to_string()
+            .contains("create Qdrant collection 'docs'"));
         assert!(collection_error.to_string().contains("Permission denied"));
     }
 }

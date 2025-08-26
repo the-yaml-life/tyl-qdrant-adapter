@@ -40,7 +40,11 @@ impl VectorStore for MockQdrantAdapter {
         Ok(())
     }
 
-    async fn store_vectors_batch(&self, collection: &str, vectors: Vec<Vector>) -> TylResult<Vec<TylResult<()>>> {
+    async fn store_vectors_batch(
+        &self,
+        collection: &str,
+        vectors: Vec<Vector>,
+    ) -> TylResult<Vec<TylResult<()>>> {
         let mut results = Vec::new();
         for vector in vectors {
             let result = self.store_vector(collection, vector).await;
@@ -58,7 +62,12 @@ impl VectorStore for MockQdrantAdapter {
         }
     }
 
-    async fn search_similar(&self, collection: &str, _query_vector: Vec<f32>, params: SearchParams) -> TylResult<Vec<VectorSearchResult>> {
+    async fn search_similar(
+        &self,
+        collection: &str,
+        _query_vector: Vec<f32>,
+        params: SearchParams,
+    ) -> TylResult<Vec<VectorSearchResult>> {
         let vectors = self.vectors.lock().unwrap();
         if let Some(collection_vectors) = vectors.get(collection) {
             let mut results = Vec::new();
@@ -67,9 +76,10 @@ impl VectorStore for MockQdrantAdapter {
                 let matches_filter = if params.filters.is_empty() {
                     true
                 } else {
-                    params.filters.iter().all(|(key, value)| {
-                        vector.metadata.get(key) == Some(value)
-                    })
+                    params
+                        .filters
+                        .iter()
+                        .all(|(key, value)| vector.metadata.get(key) == Some(value))
                 };
 
                 if matches_filter {
@@ -110,25 +120,28 @@ impl VectorCollectionManager for MockQdrantAdapter {
     async fn create_collection(&self, config: CollectionConfig) -> TylResult<()> {
         let mut collections = self.collections.lock().unwrap();
         if collections.contains_key(&config.name) {
-            return Err(vector_errors::storage_failed(format!("Collection '{}' already exists", config.name)));
+            return Err(vector_errors::storage_failed(format!(
+                "Collection '{}' already exists",
+                config.name
+            )));
         }
         let collection_name = config.name.clone();
         collections.insert(collection_name.clone(), config);
-        
+
         // Initialize empty vector storage for this collection
         let mut vectors = self.vectors.lock().unwrap();
         vectors.insert(collection_name, HashMap::new());
-        
+
         Ok(())
     }
 
     async fn delete_collection(&self, collection_name: &str) -> TylResult<()> {
         let mut collections = self.collections.lock().unwrap();
         let mut vectors = self.vectors.lock().unwrap();
-        
+
         collections.remove(collection_name);
         vectors.remove(collection_name);
-        
+
         Ok(())
     }
 
@@ -137,22 +150,31 @@ impl VectorCollectionManager for MockQdrantAdapter {
         Ok(collections.values().cloned().collect())
     }
 
-    async fn get_collection_info(&self, collection_name: &str) -> TylResult<Option<CollectionConfig>> {
+    async fn get_collection_info(
+        &self,
+        collection_name: &str,
+    ) -> TylResult<Option<CollectionConfig>> {
         let collections = self.collections.lock().unwrap();
         Ok(collections.get(collection_name).cloned())
     }
 
-    async fn get_collection_stats(&self, collection_name: &str) -> TylResult<HashMap<String, serde_json::Value>> {
+    async fn get_collection_stats(
+        &self,
+        collection_name: &str,
+    ) -> TylResult<HashMap<String, serde_json::Value>> {
         let vectors = self.vectors.lock().unwrap();
         let mut stats = HashMap::new();
-        
+
         if let Some(collection_vectors) = vectors.get(collection_name) {
-            stats.insert("vectors_count".to_string(), serde_json::json!(collection_vectors.len()));
+            stats.insert(
+                "vectors_count".to_string(),
+                serde_json::json!(collection_vectors.len()),
+            );
             stats.insert("status".to_string(), serde_json::json!("green"));
         } else {
             return Err(vector_errors::collection_not_found(collection_name));
         }
-        
+
         Ok(stats)
     }
 }
@@ -188,6 +210,9 @@ impl VectorDatabase for MockQdrantAdapter {
     }
 
     fn supports_feature(&self, feature: &str) -> bool {
-        matches!(feature, "collections" | "health_check" | "batch_operations" | "filtering")
+        matches!(
+            feature,
+            "collections" | "health_check" | "batch_operations" | "filtering"
+        )
     }
 }
