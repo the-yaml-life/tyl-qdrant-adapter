@@ -227,26 +227,34 @@ async fn test_advanced_filtering_range_queries() {
     let mut vector1 = Vector::new("item1".to_string(), vec![1.0, 0.0, 0.0]);
     vector1.add_metadata("price", serde_json::json!(100.0));
     vector1.add_metadata("rating", serde_json::json!(4.5));
-    adapter.store_vector("advanced_test", vector1).await.unwrap();
+    adapter
+        .store_vector("advanced_test", vector1)
+        .await
+        .unwrap();
 
     let mut vector2 = Vector::new("item2".to_string(), vec![0.0, 1.0, 0.0]);
     vector2.add_metadata("price", serde_json::json!(200.0));
     vector2.add_metadata("rating", serde_json::json!(3.8));
-    adapter.store_vector("advanced_test", vector2).await.unwrap();
+    adapter
+        .store_vector("advanced_test", vector2)
+        .await
+        .unwrap();
 
     let mut vector3 = Vector::new("item3".to_string(), vec![0.0, 0.0, 1.0]);
     vector3.add_metadata("price", serde_json::json!(150.0));
     vector3.add_metadata("rating", serde_json::json!(4.2));
-    adapter.store_vector("advanced_test", vector3).await.unwrap();
+    adapter
+        .store_vector("advanced_test", vector3)
+        .await
+        .unwrap();
 
     // Test range filter using new syntax: {"$gte": 120, "$lte": 180}
     let range_filter = serde_json::json!({
         "$gte": 120.0,
         "$lte": 180.0
     });
-    
-    let search_params = SearchParams::with_limit(10)
-        .with_filter("price", range_filter);
+
+    let search_params = SearchParams::with_limit(10).with_filter("price", range_filter);
 
     let results = adapter
         .search_similar("advanced_test", vec![0.5, 0.5, 0.0], search_params)
@@ -278,9 +286,8 @@ async fn test_advanced_filtering_exists_queries() {
     let exists_filter = serde_json::json!({
         "$exists": true
     });
-    
-    let search_params = SearchParams::with_limit(10)
-        .with_filter("category", exists_filter);
+
+    let search_params = SearchParams::with_limit(10).with_filter("category", exists_filter);
 
     let results = adapter
         .search_similar("exists_test", vec![0.5, 0.5], search_params)
@@ -315,9 +322,8 @@ async fn test_advanced_filtering_in_queries() {
     let in_filter = serde_json::json!({
         "$in": ["electronics", "books"]
     });
-    
-    let search_params = SearchParams::with_limit(10)
-        .with_filter("category", in_filter);
+
+    let search_params = SearchParams::with_limit(10).with_filter("category", in_filter);
 
     let results = adapter
         .search_similar("in_test", vec![0.3, 0.7], search_params)
@@ -331,7 +337,7 @@ async fn test_advanced_filtering_in_queries() {
 fn test_advanced_filter_syntax_validation() {
     // Test that our filter syntax is properly structured
     use serde_json::json;
-    
+
     // Range filter
     let range_filter = json!({
         "$gte": 10.0,
@@ -339,25 +345,25 @@ fn test_advanced_filter_syntax_validation() {
         "$gt": 5.0,
         "$lt": 200.0
     });
-    
+
     assert!(range_filter.is_object());
     assert!(range_filter.as_object().unwrap().contains_key("$gte"));
     assert_eq!(range_filter["$gte"], json!(10.0));
-    
+
     // IN filter
     let in_filter = json!({
         "$in": ["value1", "value2", "value3"]
     });
-    
+
     assert!(in_filter.is_object());
     assert!(in_filter.as_object().unwrap().contains_key("$in"));
     assert!(in_filter["$in"].is_array());
-    
+
     // EXISTS filter
     let exists_filter = json!({
         "$exists": true
     });
-    
+
     assert!(exists_filter.is_object());
     assert!(exists_filter.as_object().unwrap().contains_key("$exists"));
     assert_eq!(exists_filter["$exists"], json!(true));
