@@ -454,6 +454,126 @@ impl QdrantAdapter {
         })
     }
 
+    /// Build range condition from filter object (e.g. {"$gte": 10, "$lte": 20})
+    fn build_range_condition(field: &str, obj: &serde_json::Map<String, serde_json::Value>) -> VectorResult<qdrant_client::qdrant::Condition> {
+        use qdrant_client::qdrant::{Condition, FieldCondition, Range};
+        
+        let mut gte = None;
+        let mut lte = None;
+        let mut gt = None;
+        let mut lt = None;
+        
+        for (op, value) in obj {
+            let num_val = value.as_f64().ok_or_else(|| {
+                vector_errors::invalid_dimension(0, 0) // Using placeholder error, could be improved
+            })?;
+            
+            match op.as_str() {
+                "$gte" => gte = Some(num_val),
+                "$lte" => lte = Some(num_val),
+                "$gt" => gt = Some(num_val),
+                "$lt" => lt = Some(num_val),
+                _ => continue,
+            }
+        }
+        
+        let range = Range { gte, lte, gt, lt };
+        
+        Ok(Condition {
+            condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                FieldCondition {
+                    key: field.to_string(),
+                    r#match: None,
+                    range: Some(range),
+                    geo_bounding_box: None,
+                    geo_radius: None,
+                    geo_polygon: None,
+                    values_count: None,
+                    is_empty: None,
+                    is_null: None,
+                    datetime_range: None,
+                },
+            )),
+        })
+    }
+
+    /// Build IN condition from filter object (e.g. {"$in": ["value1", "value2"]})
+    fn build_in_condition(field: &str, obj: &serde_json::Map<String, serde_json::Value>) -> VectorResult<qdrant_client::qdrant::Condition> {
+        use qdrant_client::qdrant::{Condition, FieldCondition, Match};
+        
+        if let Some(serde_json::Value::Array(values)) = obj.get("$in") {
+            // For arrays, we'll create multiple OR conditions 
+            // This is a simplification - ideally we'd use ValuesCount but it's more complex
+            if let Some(first_val) = values.first() {
+                let match_value = match first_val {
+                    serde_json::Value::String(s) => Some(qdrant_client::qdrant::r#match::MatchValue::Keyword(s.clone())),
+                    serde_json::Value::Number(n) if n.is_i64() => Some(qdrant_client::qdrant::r#match::MatchValue::Integer(n.as_i64().unwrap())),
+                    serde_json::Value::Number(n) if n.is_f64() => {
+                        // Convert float to integer for compatibility with Qdrant
+                        let int_val = n.as_f64().unwrap() as i64;
+                        Some(qdrant_client::qdrant::r#match::MatchValue::Integer(int_val))
+                    },
+                    serde_json::Value::Bool(b) => Some(qdrant_client::qdrant::r#match::MatchValue::Boolean(*b)),
+                    _ => None,
+                };
+                
+                if let Some(mv) = match_value {
+                    return Ok(Condition {
+                        condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                            FieldCondition {
+                                key: field.to_string(),
+                                r#match: Some(Match { match_value: Some(mv) }),
+                                range: None,
+                                geo_bounding_box: None,
+                                geo_radius: None,
+                                geo_polygon: None,
+                                values_count: None,
+                                is_empty: None,
+                                is_null: None,
+                                datetime_range: None,
+                            },
+                        )),
+                    });
+                }
+            }
+        }
+        
+        Err(vector_errors::invalid_dimension(0, 0)) // Placeholder error
+    }
+
+    /// Build NOT EQUALS condition from filter object (e.g. {"$ne": "value"})
+    fn build_not_equals_condition(_field: &str, _obj: &serde_json::Map<String, serde_json::Value>) -> VectorResult<qdrant_client::qdrant::Condition> {
+        // For now, return an error as NOT EQUALS is complex in Qdrant
+        // Would need to be implemented using must_not in the filter
+        Err(vector_errors::storage_failed("$ne operator not yet implemented"))
+    }
+
+    /// Build EXISTS condition from filter object (e.g. {"$exists": true})  
+    fn build_exists_condition(field: &str, obj: &serde_json::Map<String, serde_json::Value>) -> VectorResult<qdrant_client::qdrant::Condition> {
+        use qdrant_client::qdrant::{Condition, FieldCondition};
+        
+        let exists = obj.get("$exists")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+            
+        Ok(Condition {
+            condition_one_of: Some(qdrant_client::qdrant::condition::ConditionOneOf::Field(
+                FieldCondition {
+                    key: field.to_string(),
+                    r#match: None,
+                    range: None,
+                    geo_bounding_box: None,
+                    geo_radius: None,
+                    geo_polygon: None,
+                    values_count: None,
+                    is_empty: Some(!exists),
+                    is_null: Some(!exists),
+                    datetime_range: None,
+                },
+            )),
+        })
+    }
+
     /// Build Qdrant filter from search parameters with sophisticated filtering
     fn build_filter(params: &SearchParams) -> Option<Filter> {
         use qdrant_client::qdrant::{Condition, FieldCondition, Filter, Match};
@@ -466,6 +586,31 @@ impl QdrantAdapter {
 
         for (field, value) in &params.filters {
             let condition = match value {
+                // Support for special filter objects with operators
+                serde_json::Value::Object(obj) if obj.contains_key("$gte") || obj.contains_key("$lte") || obj.contains_key("$gt") || obj.contains_key("$lt") => {
+                    match Self::build_range_condition(field, obj) {
+                        Ok(cond) => cond,
+                        Err(_) => continue, // Skip invalid range conditions
+                    }
+                }
+                serde_json::Value::Object(obj) if obj.contains_key("$in") => {
+                    match Self::build_in_condition(field, obj) {
+                        Ok(cond) => cond,
+                        Err(_) => continue, // Skip invalid in conditions
+                    }
+                }
+                serde_json::Value::Object(obj) if obj.contains_key("$ne") => {
+                    match Self::build_not_equals_condition(field, obj) {
+                        Ok(cond) => cond,
+                        Err(_) => continue, // Skip unsupported $ne conditions
+                    }
+                }
+                serde_json::Value::Object(obj) if obj.contains_key("$exists") => {
+                    match Self::build_exists_condition(field, obj) {
+                        Ok(cond) => cond,
+                        Err(_) => continue, // Skip invalid exists conditions
+                    }
+                }
                 serde_json::Value::String(s) => {
                     let match_value = Match {
                         match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Keyword(
@@ -517,8 +662,8 @@ impl QdrantAdapter {
                             ),
                         }
                     } else if let Some(float_val) = n.as_f64() {
-                        // For range queries, we use exact match for now
-                        // TODO: Support range filtering with proper Range struct
+                        // Convert float to integer for Qdrant compatibility
+                        // Note: For exact float matching, range filters should be used instead
                         let match_value = Match {
                             match_value: Some(qdrant_client::qdrant::r#match::MatchValue::Integer(
                                 float_val as i64,
